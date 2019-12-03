@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:email="http://www.mulesoft.org/schema/mule/email" xmlns:file="http://www.mulesoft.org/schema/mule/file"
+	xmlns:batch="http://www.mulesoft.org/schema/mule/batch"
+	xmlns:validation="http://www.mulesoft.org/schema/mule/validation" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd
+http://www.mulesoft.org/schema/mule/batch http://www.mulesoft.org/schema/mule/batch/current/mule-batch.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+http://www.mulesoft.org/schema/mule/email http://www.mulesoft.org/schema/mule/email/current/mule-email.xsd">
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="f3e25c6e-861f-407a-9281-90482bd0acff" >
+		<http:listener-connection host="localhost" port="8083" />
+	</http:listener-config>
+	<http:request-config name="HTTP_Request_configuration" doc:name="HTTP Request configuration" doc:id="6b2d237e-a203-405a-b205-733f0e39c433" >
+		<http:request-connection protocol="HTTPS" host="api.keeptruckin.com" />
+	</http:request-config>
+	<file:config name="File_Config" doc:name="File Config" doc:id="40fe4033-91a7-418f-ab95-4d7007e9758e" >
+		<file:connection />
+	</file:config>
+	<email:smtp-config name="Email_SMTP" doc:name="Email SMTP" doc:id="03c14a86-14f7-40c4-afa6-1d52b497f810" >
+		<email:smtp-connection />
+	</email:smtp-config>
+	<flow name="batchdemoexampleFlow" doc:id="d261041a-98c7-4146-b358-b0b74dae33a8" >
+		<http:listener doc:name="Listener" doc:id="efe17e96-e2c9-4b97-8ff0-e8bd87edb206" config-ref="HTTP_Listener_config" path="/DriverDetails"/>
+		<http:request method="GET" doc:name="Request" doc:id="682103b0-aeaa-4ef3-9f7b-71512cc346cf" config-ref="HTTP_Request_configuration" path="/v1/vehicles">
+			<http:headers ><![CDATA[#[output application/java
+---
+{
+	"x-api-key" : "3e530b1f-7da3-47e9-96a6-de23cb561dd3"
+}]]]></http:headers>
+		</http:request>
+		<validation:is-true doc:name="Is true" doc:id="aa723ebd-12a4-4512-9b86-6771264d263b" expression="#[sizeOf(payload)&gt;0]" message="Records are Getting empty"/>
+		<ee:transform doc:name="Transform Message" doc:id="75308004-ab01-45b6-8f9c-23499f22b404" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="OuterVariable" ><![CDATA[%dw 2.0
+output application/java
+---
+payload.vehicles]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<batch:job jobName="batchdemoexampleBatch_Job" doc:id="4e0d2b43-0d78-4edb-a8b9-9f937908304e" >
+			<batch:process-records >
+				<batch:step name="Batch_Step" doc:id="f2d7af1e-49bd-413e-9cc1-4af5059b7da6" >
+					<set-variable value="#[payload.id]" doc:name="Set Variable" doc:id="81921f0e-1eb2-4646-9c19-a528521347f3" variableName="InsideVariable"/>
+					<logger level="INFO" doc:name="Logger" doc:id="0e5db02b-03e0-400c-a397-c6854657e02b" message="#[payload]"/>
+					<batch:aggregator doc:name="Batch Aggregator" doc:id="a3693da2-c692-4827-bea0-605b11ad3171" size="2">
+						<ee:transform doc:name="Transform Message" doc:id="ef9fb085-d2be-438f-a7de-7e5c9813dca1" >
+							<ee:message >
+								<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+vars.OuterVariable]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+						<file:write doc:id="f8350181-fdf9-438e-b6d0-75b7207afea2" config-ref="File_Config" path="/home/mustafa/Vehicles.txt"/>
+						<logger level="INFO" doc:name="Logger" doc:id="6825ef15-ef22-4397-9de8-9aae893c2575" message="#[payload]"/>
+					</batch:aggregator>
+				</batch:step>
+			</batch:process-records>
+			<batch:on-complete >
+				<logger level="INFO" doc:name="Logger" doc:id="34247f3b-a37e-44a7-aac8-028ab37811ac" message="#[payload]"/>
+			</batch:on-complete>
+		</batch:job>
+		<set-payload value="Flow Executed Successfully" doc:name="Set Payload" doc:id="4cc83829-634c-4a8d-a845-feaefc6fd488" />
+	</flow>
+</mule>
